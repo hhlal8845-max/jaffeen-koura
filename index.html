@@ -225,6 +225,18 @@ body.ramadan{--dark:#05080A;--dark2:#080D10}
 .hist-era p{color:var(--text2);font-size:0.87rem;line-height:1.85}
 .hist-era .era-year{background:rgba(201,168,76,0.1);border:1px solid var(--border);color:var(--gold);padding:2px 10px;border-radius:20px;font-size:0.72rem}
 
+
+/* EDIT MODE */
+.del-btn{position:absolute;top:8px;left:8px;background:rgba(220,50,50,0.9);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:0.75rem;display:none;align-items:center;justify-content:center;z-index:10;transition:all 0.2s}
+.del-btn:hover{background:#ff2020;transform:scale(1.1)}
+body.edit-mode .del-btn{display:flex}
+body.edit-mode .news-card{outline:1px dashed rgba(220,50,50,0.3)}
+body.edit-mode .g-item{outline:1px dashed rgba(220,50,50,0.3)}
+.news-card{position:relative}
+.g-item{position:relative}
+.edit-mode-bar{display:none;align-items:center;gap:10px;background:rgba(220,50,50,0.1);border:1px solid rgba(220,50,50,0.3);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:0.83rem;color:#ff8080}
+body.edit-mode .edit-mode-bar{display:flex}
+
 </style>
 </head>
 <body>
@@ -367,7 +379,8 @@ body.ramadan{--dark:#05080A;--dark2:#080D10}
     <div class="sec-title">لقطات من جفين</div>
   </div>
   <div class="gal-wrap" id="gal-wrap">
-    <div class="gal-row" id="gal-row"></div>
+    <div class="edit-mode-bar" style="margin:10px 20px 0">🗑️ وضع الحذف مفعّل — اضغط ✕ على أي صورة لحذفها</div>
+  <div class="gal-row" id="gal-row"></div>
   </div>
 </section>
 
@@ -386,6 +399,7 @@ body.ramadan{--dark:#05080A;--dark2:#080D10}
   <div class="container">
     <div class="sec-label">📰 آخر المستجدات</div>
     <div class="sec-title">أخبار قرية جفين</div>
+    <div class="edit-mode-bar">🗑️ وضع الحذف مفعّل — اضغط ✕ على أي خبر لحذفه</div>
     <div class="news-grid" id="news-grid">
       <div class="news-card"><div class="news-icon">🌿</div><div class="news-body"><span class="news-cat">بيئة</span><h3>مبادرة تشجير جفين</h3><p>زراعة 500 شجرة زيتون في أراضي القرية خلال الموسم القادم.</p><div class="news-date">🕐 منذ يومين</div></div></div>
       <div class="news-card"><div class="news-icon">🏗️</div><div class="news-body"><span class="news-cat">مشاريع</span><h3>تطوير البنية التحتية</h3><p>أعمال تعبيد الطرق الداخلية للقرية مستمرة.</p><div class="news-date">🕐 منذ أسبوع</div></div></div>
@@ -507,6 +521,10 @@ body.ramadan{--dark:#05080A;--dark2:#080D10}
       <button onclick="closeAdmin()" style="background:none;border:1px solid var(--border);color:var(--text2);padding:11px 20px;border-radius:8px;cursor:pointer;font-family:Cairo,sans-serif;margin-right:8px">إلغاء</button>
     </div>
     <div id="adm-panel" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="color:var(--gold);font-weight:700;font-size:0.95rem">⚙️ لوحة التحكم</span>
+        <button onclick="toggleEditMode()" id="edit-mode-btn" style="background:rgba(220,50,50,0.1);border:1px solid rgba(220,50,50,0.3);color:#ff8080;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:Cairo,sans-serif;font-size:0.8rem">🗑️ وضع الحذف</button>
+      </div>
       <div class="adm-ttl">📰 إضافة خبر <button onclick="closeAdmin()" style="margin-right:auto;background:none;border:none;color:var(--text2);cursor:pointer;font-size:1.1rem">✕</button></div>
       <input class="c-input" id="adm-title" placeholder="عنوان الخبر...">
       <textarea class="c-input" id="adm-body" placeholder="نص الخبر..." rows="3"></textarea>
@@ -861,6 +879,117 @@ function addNews() {
 }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeAdmin(); closeQR(); closeHist(); } });
 
+// ===== EDIT MODE =====
+var editMode = false;
+function toggleEditMode() {
+  editMode = !editMode;
+  document.body.classList.toggle('edit-mode', editMode);
+  document.getElementById('edit-mode-btn').style.background = editMode ? 'rgba(220,50,50,0.3)' : 'rgba(220,50,50,0.1)';
+  document.getElementById('edit-mode-btn').textContent = editMode ? '✅ إيقاف الحذف' : '🗑️ وضع الحذف';
+  if(editMode) showNotif('وضع الحذف مفعّل — اضغط ✕ على أي عنصر', '🗑️');
+  else showNotif('وضع الحذف متوقف', '✅');
+}
+
+// ===== NEWS DELETE BTN =====
+function addDelBtn(card, onDel) {
+  var btn = document.createElement('button');
+  btn.className = 'del-btn';
+  btn.textContent = '✕';
+  btn.onclick = function(e) {
+    e.stopPropagation();
+    if(confirm('تأكيد حذف هذا العنصر؟')) onDel();
+  };
+  card.appendChild(btn);
+}
+
+// ===== GALLERY PERSIST (localStorage) =====
+function saveGallery() {
+  try {
+    var imgs = Array.from(document.getElementById('gal-row').querySelectorAll('img')).map(function(i){ return i.src; });
+    localStorage.setItem('jaffeen-gallery-extra', JSON.stringify(imgs.slice(0, 10)));
+  } catch(e) {}
+}
+function loadGallery() {
+  try {
+    var saved = JSON.parse(localStorage.getItem('jaffeen-gallery-extra') || '[]');
+    saved.forEach(function(src) {
+      if(!src || src.length < 50) return;
+      appendGalleryImg(src, true);
+    });
+  } catch(e) {}
+}
+
+function appendGalleryImg(src, skipSave) {
+  var row = document.getElementById('gal-row');
+  var d = document.createElement('div');
+  d.className = 'g-item';
+  d.style.position = 'relative';
+  var img = document.createElement('img');
+  img.src = src; img.alt = 'جفين';
+  d.appendChild(img);
+  var idx = IMGS.length;
+  d.onclick = function(e) { if(!editMode) openLB(idx); };
+  IMGS.push(src);
+  idx = IMGS.length - 1;
+  addDelBtn(d, function() {
+    IMGS = IMGS.filter(function(x){ return x !== src; });
+    d.remove();
+    saveGallery();
+    showNotif('تم حذف الصورة', '🗑️');
+  });
+  row.prepend(d);
+  if(!skipSave) saveGallery();
+}
+
+// Override addGalImg
+window.addGalImg = function() {
+  var src = document.getElementById('adm-gal-img').src;
+  if(!src || src.length < 50) return;
+  appendGalleryImg(src, false);
+  document.getElementById('adm-gal-preview').style.display = 'none';
+  document.getElementById('adm-gal-file').value = '';
+  closeAdmin();
+  showNotif('تمت إضافة الصورة للمعرض!', '📸');
+  document.getElementById('gallery').scrollIntoView({behavior:'smooth'});
+};
+
+// Load saved gallery on startup
+window.addEventListener('load', loadGallery);
+
+// ===== NEWS: add del btns to existing cards =====
+window.addEventListener('load', function() {
+  document.querySelectorAll('#news-grid .news-card').forEach(function(card) {
+    addDelBtn(card, function() {
+      card.remove();
+      showNotif('تم حذف الخبر', '🗑️');
+    });
+  });
+});
+
+// ===== OVERRIDE addNews TO INCLUDE DEL BTN =====
+var _origAddNews = window.addNews;
+window.addNews = function() {
+  var title = document.getElementById('adm-title').value.trim();
+  var body = document.getElementById('adm-body').value.trim();
+  var cat = document.getElementById('adm-cat').value;
+  if(!title || !body) { showNotif('ملء جميع الحقول مطلوب', '⚠️'); return; }
+  var emojis = {'بيئة':'🌿','مشاريع':'🏗️','تعليم':'🎓','رياضة':'⚽','أخبار':'📢'};
+  var card = document.createElement('div');
+  card.className = 'news-card';
+  card.innerHTML = '<div class="news-icon">'+(emojis[cat]||'📰')+'</div><div class="news-body"><span class="news-cat">'+cat+'</span><h3>'+title+'</h3><p>'+body+'</p><div class="news-date">🕐 الآن</div></div>';
+  addDelBtn(card, function() {
+    card.remove();
+    showNotif('تم حذف الخبر', '🗑️');
+  });
+  document.getElementById('news-grid').prepend(card);
+  document.getElementById('adm-title').value = '';
+  document.getElementById('adm-body').value = '';
+  closeAdmin();
+  showNotif('تم نشر الخبر!', '📰');
+  document.getElementById('news-s').scrollIntoView({behavior:'smooth'});
+};
+
+
 // RAMADAN MODE
 (function() {
   var now = new Date();
@@ -1133,7 +1262,7 @@ function addGalImg() {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 const cfg = {
   apiKey: "AIzaSyBckm2ktT24BS3KRvo6BgjBrvXohPf0_yc",
@@ -1151,12 +1280,27 @@ async function loadNews() {
     const q = query(collection(db, 'news'), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
     const grid = document.getElementById('news-grid');
-    snap.forEach(function(d) {
-      const data = d.data();
+    snap.forEach(function(docSnap) {
+      const data = docSnap.data();
       const emojis = {'بيئة':'🌿','مشاريع':'🏗️','تعليم':'🎓','رياضة':'⚽','أخبار':'📢'};
       const card = document.createElement('div');
       card.className = 'news-card';
       card.innerHTML = '<div class="news-icon">'+(emojis[data.category]||'📰')+'</div><div class="news-body"><span class="news-cat">'+(data.category||'أخبار')+'</span><h3>'+data.title+'</h3><p>'+data.body+'</p><div class="news-date">🕐 '+(data.timeLabel||'الآن')+'</div></div>';
+      // del button connected to Firebase
+      const delBtn = document.createElement('button');
+      delBtn.className = 'del-btn';
+      delBtn.textContent = '✕';
+      delBtn.onclick = async function(e) {
+        e.stopPropagation();
+        if(confirm('تأكيد حذف هذا الخبر؟')) {
+          try {
+            await deleteDoc(doc(db, 'news', docSnap.id));
+            card.remove();
+            if(window.showNotif) showNotif('تم حذف الخبر من Firebase', '🗑️');
+          } catch(err) { console.log('Delete error:', err.message); }
+        }
+      };
+      card.appendChild(delBtn);
       grid.prepend(card);
     });
   } catch(e) { console.log('Firebase:', e.message); }
