@@ -237,6 +237,7 @@ body.edit-mode .g-item{outline:1px dashed rgba(220,50,50,0.3)}
 .edit-mode-bar{display:none;align-items:center;gap:10px;background:rgba(220,50,50,0.1);border:1px solid rgba(220,50,50,0.3);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:0.83rem;color:#ff8080}
 body.edit-mode .edit-mode-bar{display:flex}
 
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 </style>
 </head>
 <body>
@@ -401,9 +402,11 @@ body.edit-mode .edit-mode-bar{display:flex}
     <div class="sec-title">أخبار قرية جفين</div>
     <div class="edit-mode-bar">🗑️ وضع الحذف مفعّل — اضغط ✕ على أي خبر لحذفه</div>
     <div class="news-grid" id="news-grid">
-      <div class="news-card"><div class="news-icon">🌿</div><div class="news-body"><span class="news-cat">بيئة</span><h3>مبادرة تشجير جفين</h3><p>زراعة 500 شجرة زيتون في أراضي القرية خلال الموسم القادم.</p><div class="news-date">🕐 منذ يومين</div></div></div>
-      <div class="news-card"><div class="news-icon">🏗️</div><div class="news-body"><span class="news-cat">مشاريع</span><h3>تطوير البنية التحتية</h3><p>أعمال تعبيد الطرق الداخلية للقرية مستمرة.</p><div class="news-date">🕐 منذ أسبوع</div></div></div>
-      <div class="news-card"><div class="news-icon">🎓</div><div class="news-body"><span class="news-cat">تعليم</span><h3>منح دراسية لأبناء جفين</h3><p>بلدية الكورة تعلن عن منح دراسية للمتفوقين.</p><div class="news-date">🕐 منذ أسبوعين</div></div></div>
+      <div id="news-empty" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text2);font-size:0.9rem">
+        <div style="font-size:2.5rem;margin-bottom:10px">📰</div>
+        <p>لا توجد أخبار حتى الآن</p>
+        <p style="font-size:0.78rem;margin-top:6px">أضف أول خبر من لوحة التحكم ⚙️</p>
+      </div>
     </div>
   </div>
 </section>
@@ -503,8 +506,8 @@ body.edit-mode .edit-mode-bar{display:flex}
 
 <!-- AI BOX -->
 <div id="ai-box">
-  <div class="ai-hdr">🤖 مساعد جفين الذكي</div>
-  <div id="ai-msgs"><div class="ai-m bot">مرحباً! اسألني عن جفين 🌿</div></div>
+  <div class="ai-hdr">✨ مساعد جفين — Gemini AI</div>
+  <div id="ai-msgs"><div class="ai-m bot">مرحباً! أنا Gemini، مساعدك الذكي لكل شي عن جفين وأكثر 🌿✨</div></div>
   <div class="ai-row">
     <input id="ai-inp" placeholder="اسألني...">
     <button onclick="sendAI()">إرسال</button>
@@ -798,49 +801,90 @@ function submitDonate() {
   document.querySelectorAll('.d-btn').forEach(function(b){ b.classList.remove('on'); });
 }
 
-// AI
+// AI — Claude API
+var aiHistory = [];
+
 function toggleAI() {
   var box = document.getElementById('ai-box');
-  box.style.display = box.style.display==='flex' ? 'none' : 'flex';
-  if(box.style.display==='flex') document.getElementById('ai-inp').focus();
+  box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+  if(box.style.display === 'flex') document.getElementById('ai-inp').focus();
 }
-var KB = [
-  {k:['مسجد','صلاة','جامع'], a:'في جفين 5 مساجد أبرزها مسجد الحسن ومسجد عمر بن الخطاب'},
-  {k:['مدرسة','تعليم','طلاب'], a:'في جفين 3 مدارس: ابتدائية وإعدادية وثانوية'},
-  {k:['سكان','نفوس','عدد'], a:'عدد سكان جفين حوالي 6150 نسمة'},
-  {k:['مسافة','بعيدة','إربد','وصول'], a:'جفين 25 كم جنوب غرب إربد، طريق سريع ممتاز'},
-  {k:['ارتفاع','جبل','منسوب'], a:'ترتفع جفين 700م عن سطح البحر، جو معتدل رائع'},
-  {k:['زيتون','زيت','شجر'], a:'تشتهر جفين بزيت الزيتون البكر الممتاز وآلاف الأشجار المعمّرة'},
-  {k:['آثار','تاريخ','روماني','قديم'], a:'تضم جفين آثاراً رومانية وبيزنطية عمرها أكثر من 800 سنة'},
-  {k:['عائلة','عشيرة','ناس'], a:'أبرز عائلات جفين: الزعبي، العبادي، الشرعة، الحسن والمومني'},
-  {k:['طقس','جو','حرارة','مناخ'], a:'طقس جفين معتدل صيفاً وبارد ممطر شتاءً، وأحياناً يثلج'},
-  {k:['مرحبا','هلا','سلام','hi','hello','هاي'], a:'أهلاً وسهلاً! اسألني أي شيء عن قرية جفين الجميلة'},
-  {k:['شكر','شكراً','ممنون'], a:'العفو! يسعدني مساعدتك دائماً'}
-];
-function sendAI() {
+
+function addMsg(text, role) {
+  var msgs = document.getElementById('ai-msgs');
+  var d = document.createElement('div');
+  d.className = 'ai-m ' + (role === 'user' ? 'usr' : 'bot');
+  d.textContent = text;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+
+function addTyping() {
+  var msgs = document.getElementById('ai-msgs');
+  var d = document.createElement('div');
+  d.className = 'ai-m bot';
+  d.id = 'typing-indicator';
+  d.innerHTML = '<span style="opacity:0.6;letter-spacing:3px;animation:blink 1s infinite">●●●</span>';
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendAI() {
   var inp = document.getElementById('ai-inp');
   var q = inp.value.trim();
   if(!q) return;
   inp.value = '';
-  var msgs = document.getElementById('ai-msgs');
-  var um = document.createElement('div');
-  um.className = 'ai-m usr';
-  um.textContent = q;
-  msgs.appendChild(um);
-  msgs.scrollTop = msgs.scrollHeight;
-  var ans = 'عذراً، لا أعرف إجابة على هذا السؤال حالياً!';
-  var ql = q.toLowerCase();
-  for(var i=0; i<KB.length; i++) {
-    if(KB[i].k.some(function(kw){ return ql.indexOf(kw) > -1; })) { ans = KB[i].a; break; }
+  inp.disabled = true;
+
+  addMsg(q, 'user');
+  aiHistory.push({ role: 'user', parts: [{ text: q }] });
+  addTyping();
+
+  try {
+    var GEMINI_KEY = 'AIzaSyDemoKeyReplaceMe';
+    var systemMsg = 'أنت مساعد ذكي لموقع قرية جفين الأردنية. جفين قرية في لواء الكورة محافظة إربد، تبعد 25 كم عن إربد، ارتفاعها 700م، سكانها 6150 نسمة، تشتهر بزيت الزيتون والآثار الرومانية والبيزنطية. أجب باللغة العربية بشكل ودي ومختصر وجميل. إذا سألوا عن أشياء خارج القرية أجب بشكل عام ومفيد.';
+
+    var messages = aiHistory.slice();
+    // Prepend system as first user message if history just started
+    var payload = {
+      system_instruction: { parts: [{ text: systemMsg }] },
+      contents: messages
+    };
+
+    var res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    var el = document.getElementById('typing-indicator');
+    if(el) el.remove();
+
+    if(res.ok) {
+      var data = await res.json();
+      var answer = data.candidates[0].content.parts[0].text;
+      aiHistory.push({ role: 'model', parts: [{ text: answer }] });
+      addMsg(answer, 'bot');
+    } else {
+      var errData = await res.json();
+      console.log('Gemini error:', errData);
+      addMsg('عذراً، حدث خطأ. حاول مرة ثانية!', 'bot');
+    }
+  } catch(e) {
+    var el2 = document.getElementById('typing-indicator');
+    if(el2) el2.remove();
+    addMsg('تعذر الاتصال. تحقق من الإنترنت.', 'bot');
+    console.log('AI error:', e);
   }
-  setTimeout(function() {
-    var bm = document.createElement('div');
-    bm.className = 'ai-m bot';
-    bm.textContent = ans;
-    msgs.appendChild(bm);
-    msgs.scrollTop = msgs.scrollHeight;
-  }, 500);
+
+  inp.disabled = false;
+  inp.focus();
 }
+
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('ai-inp').addEventListener('keydown', function(e){ if(e.key==='Enter') sendAI(); });
 });
@@ -853,6 +897,7 @@ function openAdmin() {
   document.getElementById('adm-pass').value = '';
 }
 function closeAdmin() { document.getElementById('adm-modal').classList.remove('on'); }
+window.closeAdmin = closeAdmin;
 function checkPass() {
   if(document.getElementById('adm-pass').value === 'jaffeen2026') {
     document.getElementById('adm-pass-s').style.display = 'none';
@@ -861,22 +906,7 @@ function checkPass() {
     showNotif('كلمة السر غلط!', '⚠️');
   }
 }
-function addNews() {
-  var title = document.getElementById('adm-title').value.trim();
-  var body = document.getElementById('adm-body').value.trim();
-  var cat = document.getElementById('adm-cat').value;
-  if(!title || !body) { showNotif('ملء جميع الحقول مطلوب', '⚠️'); return; }
-  var emojis = {'بيئة':'🌿','مشاريع':'🏗️','تعليم':'🎓','رياضة':'⚽','أخبار':'📢'};
-  var card = document.createElement('div');
-  card.className = 'news-card';
-  card.innerHTML = '<div class="news-icon">'+(emojis[cat]||'📰')+'</div><div class="news-body"><span class="news-cat">'+cat+'</span><h3>'+title+'</h3><p>'+body+'</p><div class="news-date">🕐 الآن</div></div>';
-  document.getElementById('news-grid').prepend(card);
-  document.getElementById('adm-title').value = '';
-  document.getElementById('adm-body').value = '';
-  closeAdmin();
-  showNotif('تم نشر الخبر!', '📰');
-  document.getElementById('news-s').scrollIntoView({behavior:'smooth'});
-}
+// addNews handled by Firebase
 document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeAdmin(); closeQR(); closeHist(); } });
 
 // ===== EDIT MODE =====
@@ -967,27 +997,7 @@ window.addEventListener('load', function() {
 });
 
 // ===== OVERRIDE addNews TO INCLUDE DEL BTN =====
-var _origAddNews = window.addNews;
-window.addNews = function() {
-  var title = document.getElementById('adm-title').value.trim();
-  var body = document.getElementById('adm-body').value.trim();
-  var cat = document.getElementById('adm-cat').value;
-  if(!title || !body) { showNotif('ملء جميع الحقول مطلوب', '⚠️'); return; }
-  var emojis = {'بيئة':'🌿','مشاريع':'🏗️','تعليم':'🎓','رياضة':'⚽','أخبار':'📢'};
-  var card = document.createElement('div');
-  card.className = 'news-card';
-  card.innerHTML = '<div class="news-icon">'+(emojis[cat]||'📰')+'</div><div class="news-body"><span class="news-cat">'+cat+'</span><h3>'+title+'</h3><p>'+body+'</p><div class="news-date">🕐 الآن</div></div>';
-  addDelBtn(card, function() {
-    card.remove();
-    showNotif('تم حذف الخبر', '🗑️');
-  });
-  document.getElementById('news-grid').prepend(card);
-  document.getElementById('adm-title').value = '';
-  document.getElementById('adm-body').value = '';
-  closeAdmin();
-  showNotif('تم نشر الخبر!', '📰');
-  document.getElementById('news-s').scrollIntoView({behavior:'smooth'});
-};
+// addNews is handled by Firebase module script below
 
 
 // RAMADAN MODE
@@ -1104,19 +1114,7 @@ function playTrack(i) {
     });
 })();
 
-// VISITOR COUNTER (Firebase-backed via simple hash)
-(function() {
-  var key = 'jaffeen-visited-' + new Date().toDateString();
-  var count = parseInt(localStorage.getItem('jaffeen-vis') || '0');
-  if(!localStorage.getItem(key)) {
-    localStorage.setItem(key, '1');
-    count++;
-    localStorage.setItem('jaffeen-vis', count);
-  }
-  var base = 847;
-  var el = document.getElementById('vis-count');
-  if(el) el.textContent = (base + count).toLocaleString('ar');
-})();
+// visitor counter handled by Firebase
 
 // QR CODE (simple built-in generator)
 function openQR() {
@@ -1262,7 +1260,7 @@ function addGalImg() {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, orderBy, query, serverTimestamp, getDoc, setDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
 
 const cfg = {
   apiKey: "AIzaSyBckm2ktT24BS3KRvo6BgjBrvXohPf0_yc",
@@ -1275,51 +1273,151 @@ const cfg = {
 const app = initializeApp(cfg);
 const db = getFirestore(app);
 
-async function loadNews() {
-  try {
-    const q = query(collection(db, 'news'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const grid = document.getElementById('news-grid');
-    snap.forEach(function(docSnap) {
-      const data = docSnap.data();
-      const emojis = {'بيئة':'🌿','مشاريع':'🏗️','تعليم':'🎓','رياضة':'⚽','أخبار':'📢'};
-      const card = document.createElement('div');
-      card.className = 'news-card';
-      card.innerHTML = '<div class="news-icon">'+(emojis[data.category]||'📰')+'</div><div class="news-body"><span class="news-cat">'+(data.category||'أخبار')+'</span><h3>'+data.title+'</h3><p>'+data.body+'</p><div class="news-date">🕐 '+(data.timeLabel||'الآن')+'</div></div>';
-      // del button connected to Firebase
-      const delBtn = document.createElement('button');
-      delBtn.className = 'del-btn';
-      delBtn.textContent = '✕';
-      delBtn.onclick = async function(e) {
-        e.stopPropagation();
-        if(confirm('تأكيد حذف هذا الخبر؟')) {
-          try {
-            await deleteDoc(doc(db, 'news', docSnap.id));
-            card.remove();
-            if(window.showNotif) showNotif('تم حذف الخبر من Firebase', '🗑️');
-          } catch(err) { console.log('Delete error:', err.message); }
-        }
-      };
-      card.appendChild(delBtn);
-      grid.prepend(card);
-    });
-  } catch(e) { console.log('Firebase:', e.message); }
+function buildCard(docSnap) {
+  const data = docSnap.data();
+  const emojis = {"بيئة":"🌿","مشاريع":"🏗️","تعليم":"🎓","رياضة":"⚽","أخبار":"📢"};
+  const card = document.createElement("div");
+  card.className = "news-card";
+  card.style.position = "relative";
+  card.setAttribute("data-id", docSnap.id);
+  card.innerHTML =
+    "<div class='news-icon'>" + (emojis[data.category] || "📰") + "</div>" +
+    "<div class='news-body'>" +
+      "<span class='news-cat'>" + (data.category || "أخبار") + "</span>" +
+      "<h3>" + data.title + "</h3>" +
+      "<p>" + data.body + "</p>" +
+      "<div class='news-date'>🕐 " + (data.timeLabel || "الآن") + "</div>" +
+    "</div>";
+
+  const btn = document.createElement("button");
+  btn.className = "del-btn";
+  btn.textContent = "✕";
+  btn.onclick = async function(e) {
+    e.stopPropagation();
+    if(!confirm("تأكيد حذف هذا الخبر نهائياً؟")) return;
+    btn.textContent = "⏳";
+    try {
+      await deleteDoc(doc(db, "news", docSnap.id));
+      card.style.transition = "opacity 0.3s, transform 0.3s";
+      card.style.opacity = "0";
+      card.style.transform = "scale(0.9)";
+      setTimeout(function(){ card.remove(); }, 320);
+      if(window.showNotif) window.showNotif("تم حذف الخبر نهائياً", "🗑️");
+    } catch(err) {
+      btn.textContent = "✕";
+      if(window.showNotif) window.showNotif("فشل الحذف — تحقق من Firebase Rules", "⚠️");
+      console.error("Delete error:", err);
+    }
+  };
+  card.appendChild(btn);
+  return card;
 }
 
-const origAdd = window.addNews;
-window.addNews = async function() {
-  const title = document.getElementById('adm-title').value.trim();
-  const body = document.getElementById('adm-body').value.trim();
-  const cat = document.getElementById('adm-cat').value;
-  if(!title || !body) return;
-  origAdd();
+async function loadNews() {
+  const grid = document.getElementById("news-grid");
+  if(!grid) return;
+  grid.innerHTML = "<div style='grid-column:1/-1;text-align:center;padding:30px;color:var(--text2)'>⏳ جاري التحميل...</div>";
   try {
-    await addDoc(collection(db, 'news'), {title, body, category: cat, timeLabel:'الآن', createdAt: serverTimestamp()});
-    loadNews();
-  } catch(e) { console.log('Add news:', e.message); }
+    const snap = await getDocs(query(collection(db, "news"), orderBy("createdAt", "desc")));
+    if(snap.empty) {
+      grid.innerHTML = "<div style='grid-column:1/-1;text-align:center;padding:40px;color:var(--text2)'><div style='font-size:2.5rem;margin-bottom:10px'>📰</div><p>لا توجد أخبار بعد</p><p style='font-size:0.78rem;margin-top:6px'>أضف أول خبر من لوحة التحكم ⚙️</p></div>";
+      return;
+    }
+    grid.innerHTML = "";
+    snap.forEach(function(d){ grid.appendChild(buildCard(d)); });
+  } catch(e) {
+    grid.innerHTML = "<div style='grid-column:1/-1;text-align:center;padding:30px;color:var(--text2)'>⚠️ تعذر تحميل الأخبار</div>";
+    console.error("Load error:", e);
+  }
+}
+
+window.addNews = async function() {
+  const title = document.getElementById("adm-title").value.trim();
+  const body  = document.getElementById("adm-body").value.trim();
+  const cat   = document.getElementById("adm-cat").value;
+  if(!title || !body) { if(window.showNotif) window.showNotif("ملء جميع الحقول مطلوب", "⚠️"); return; }
+  try {
+    await addDoc(collection(db, "news"), {
+      title: title, body: body, category: cat,
+      timeLabel: "الآن", createdAt: serverTimestamp()
+    });
+    document.getElementById("adm-title").value = "";
+    document.getElementById("adm-body").value = "";
+    if(window.closeAdmin) window.closeAdmin();
+    if(window.showNotif) window.showNotif("تم نشر الخبر!", "📰");
+    await loadNews();
+
+// ===== REAL VISITOR COUNTER =====
+(async function() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const visRef = doc(db, "visitors", "stats");
+    const visitedKey = "jaffeen-visited-" + today;
+    const alreadyVisited = localStorage.getItem(visitedKey);
+
+    if(!alreadyVisited) {
+      localStorage.setItem(visitedKey, "1");
+      await setDoc(visRef, { total: increment(1) }, { merge: true });
+    }
+
+    const snap = await getDoc(visRef);
+    const total = snap.exists() ? (snap.data().total || 1) : 1;
+    const el = document.getElementById("vis-count");
+    if(el) {
+      let cur = 0;
+      const step = Math.max(1, Math.ceil(total / 50));
+      const timer = setInterval(function() {
+        cur = Math.min(cur + step, total);
+        el.textContent = cur.toLocaleString("ar");
+        if(cur >= total) clearInterval(timer);
+      }, 25);
+    }
+  } catch(e) {
+    const el = document.getElementById("vis-count");
+    if(el) el.textContent = "---";
+    console.log("visitor error:", e.message);
+  }
+})();
+    document.getElementById("news-s").scrollIntoView({behavior:"smooth"});
+  } catch(e) {
+    if(window.showNotif) window.showNotif("خطأ في الحفظ", "⚠️");
+    console.error("Add error:", e);
+  }
 };
 
 loadNews();
+
+// ===== REAL VISITOR COUNTER =====
+(async function() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const visRef = doc(db, "visitors", "stats");
+    const visitedKey = "jaffeen-visited-" + today;
+    const alreadyVisited = localStorage.getItem(visitedKey);
+
+    if(!alreadyVisited) {
+      localStorage.setItem(visitedKey, "1");
+      await setDoc(visRef, { total: increment(1) }, { merge: true });
+    }
+
+    const snap = await getDoc(visRef);
+    const total = snap.exists() ? (snap.data().total || 1) : 1;
+    const el = document.getElementById("vis-count");
+    if(el) {
+      let cur = 0;
+      const step = Math.max(1, Math.ceil(total / 50));
+      const timer = setInterval(function() {
+        cur = Math.min(cur + step, total);
+        el.textContent = cur.toLocaleString("ar");
+        if(cur >= total) clearInterval(timer);
+      }, 25);
+    }
+  } catch(e) {
+    const el = document.getElementById("vis-count");
+    if(el) el.textContent = "---";
+    console.log("visitor error:", e.message);
+  }
+})();
 </script>
 </body>
 </html>
